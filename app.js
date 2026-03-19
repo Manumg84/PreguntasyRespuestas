@@ -117,7 +117,7 @@ class FilterSelect {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "filter-select-create";
-        btn.textContent = "Crear nuevo?";
+        btn.textContent = 'Crear nuevo?';
         btn.addEventListener("click", e => {
           e.stopPropagation();
           if (typeof this.onCreate === "function") {
@@ -175,12 +175,6 @@ const modalSave = document.getElementById("modal-save");
 
 /* Filter selects */
 
-const modalState = {
-  categoryId: "",
-  topicId: "",
-  typeId: ""
-};
-
 const modalCategorySelect = new FilterSelect(
   document.getElementById("modal-category"),
   {
@@ -194,15 +188,13 @@ const modalCategorySelect = new FilterSelect(
     }
   }
 );
-modalCategorySelect.onCreate = async (label) => {
+modalCategorySelect.onCreate = (label) => {
   const name = label.trim();
   if (!name) return;
 
-  const existingBase = await db.getCategories();
-  const existingPending = pending.categories;
   const existing =
-    existingBase.find(c => c.name === name) ||
-    existingPending.find(c => c.name === name);
+    db.getCategories().find(c => c.name === name) ||
+    pending.categories.find(c => c.name === name);
 
   const created =
     existing ||
@@ -212,7 +204,7 @@ modalCategorySelect.onCreate = async (label) => {
     pending.categories.push(created);
   }
 
-  await refreshModalCategoryOptions();
+  modalCategorySelect.setOptions(mapCategoriesToOptions());
   modalCategorySelect.setValue(created.id, created.name);
 };
 
@@ -228,12 +220,13 @@ const modalTopicSelect = new FilterSelect(
     }
   }
 );
-modalTopicSelect.onCreate = async (label) => {
+modalTopicSelect.onCreate = (label) => {
   const name = label.trim();
   if (!name || !modalState.categoryId) return;
 
-  const baseTopics = await db.getTopics({ categoryId: modalState.categoryId });
-  const existingBase = baseTopics.find(t => t.name === name);
+  const existingBase = db
+    .getTopics({ categoryId: modalState.categoryId })
+    .find(t => t.name === name);
   const existingPending = pending.topics.find(
     t => t.categoryId === modalState.categoryId && t.name === name
   );
@@ -247,7 +240,7 @@ modalTopicSelect.onCreate = async (label) => {
     pending.topics.push(created);
   }
 
-  await refreshModalTopicOptions();
+  refreshModalTopicOptions();
   modalTopicSelect.setValue(created.id, created.name);
 };
 
@@ -262,15 +255,16 @@ const modalTypeSelect = new FilterSelect(
     }
   }
 );
-modalTypeSelect.onCreate = async (label) => {
+modalTypeSelect.onCreate = (label) => {
   const name = label.trim();
   if (!name || !modalState.categoryId || !modalState.topicId) return;
 
-  const baseTypes = await db.getQuizTypes({
-    categoryId: modalState.categoryId,
-    topicId: modalState.topicId
-  });
-  const existingBase = baseTypes.find(t => t.name === name);
+  const existingBase = db
+    .getQuizTypes({
+      categoryId: modalState.categoryId,
+      topicId: modalState.topicId
+    })
+    .find(t => t.name === name);
   const existingPending = pending.types.find(
     t =>
       t.categoryId === modalState.categoryId &&
@@ -292,17 +286,29 @@ modalTypeSelect.onCreate = async (label) => {
     pending.types.push(created);
   }
 
-  await refreshModalTypeOptions();
+  refreshModalTypeOptions();
   modalTypeSelect.setValue(created.id, created.name);
+};
+
+const modalState = {
+  categoryId: "",
+  topicId: "",
+  typeId: ""
 };
 
 /* Helpers */
 
-async function refreshCategoryFilter() {
+function mapCategoriesToOptions() {
+  const base = db.getCategories();
+  const extra = pending.categories;
+  return [...base, ...extra].map(c => ({ value: c.id, label: c.name }));
+}
+
+function refreshCategoryFilter() {
   const select = filterCategory;
   const current = state.filterCategoryId;
   select.innerHTML = '<option value="">Todas</option>';
-  const categories = await db.getCategories();
+  const categories = db.getCategories();
   categories.forEach(c => {
     const opt = document.createElement("option");
     opt.value = c.id;
@@ -316,11 +322,11 @@ async function refreshCategoryFilter() {
   }
 }
 
-async function refreshTopicFilter() {
+function refreshTopicFilter() {
   const select = filterTopic;
   const current = state.filterTopicId;
   select.innerHTML = '<option value="">Todos</option>';
-  const topics = await db.getTopics({
+  const topics = db.getTopics({
     categoryId: state.filterCategoryId || undefined
   });
   topics.forEach(t => {
@@ -336,11 +342,11 @@ async function refreshTopicFilter() {
   }
 }
 
-async function refreshTypeFilter() {
+function refreshTypeFilter() {
   const select = filterType;
   const current = state.filterTypeId;
   select.innerHTML = '<option value="">Todos</option>';
-  const types = await db.getQuizTypes({
+  const types = db.getQuizTypes({
     categoryId: state.filterCategoryId || undefined,
     topicId: state.filterTopicId || undefined
   });
@@ -357,14 +363,11 @@ async function refreshTypeFilter() {
   }
 }
 
-async function refreshModalCategoryOptions() {
-  const base = await db.getCategories();
-  const extra = pending.categories;
-  const list = [...base, ...extra].map(c => ({ value: c.id, label: c.name }));
-  modalCategorySelect.setOptions(list);
+function refreshModalCategoryOptions() {
+  modalCategorySelect.setOptions(mapCategoriesToOptions());
 }
 
-async function refreshModalTopicOptions() {
+function refreshModalTopicOptions() {
   if (!modalState.categoryId) {
     modalTopicSelect.setOptions([]);
     modalTopicSelect.setValue("", "");
@@ -372,7 +375,7 @@ async function refreshModalTopicOptions() {
     return;
   }
 
-  const base = await db.getTopics({ categoryId: modalState.categoryId });
+  const base = db.getTopics({ categoryId: modalState.categoryId });
   const extra = pending.topics.filter(t => t.categoryId === modalState.categoryId);
   const list = [...base, ...extra].map(t => ({
     value: t.id,
@@ -386,7 +389,7 @@ async function refreshModalTopicOptions() {
   }
 }
 
-async function refreshModalTypeOptions() {
+function refreshModalTypeOptions() {
   if (!modalState.categoryId || !modalState.topicId) {
     modalTypeSelect.setOptions([]);
     modalTypeSelect.setValue("", "");
@@ -394,7 +397,7 @@ async function refreshModalTypeOptions() {
     return;
   }
 
-  const base = await db.getQuizTypes({
+  const base = db.getQuizTypes({
     categoryId: modalState.categoryId,
     topicId: modalState.topicId
   });
@@ -422,8 +425,8 @@ function updateModalEnableFields() {
 
 /* Rendering */
 
-async function renderCards() {
-  const questions = await db.getQuestions({
+function renderCards() {
+  const questions = db.getQuestions({
     categoryId: state.filterCategoryId || undefined,
     topicId: state.filterTopicId || undefined,
     quizTypeId: state.filterTypeId || undefined
@@ -440,11 +443,9 @@ async function renderCards() {
     return;
   }
 
-  const [categories, topics, types] = await Promise.all([
-    db.getCategories(),
-    db.getTopics(),
-    db.getQuizTypes()
-  ]);
+  const categories = db.getCategories();
+  const topics = db.getTopics();
+  const types = db.getQuizTypes();
 
   const catById = Object.fromEntries(categories.map(c => [c.id, c]));
   const topicById = Object.fromEntries(topics.map(t => [t.id, t]));
@@ -452,7 +453,7 @@ async function renderCards() {
 
   questions
     .slice()
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .sort((a, b) => b.createdAt - a.createdAt)
     .forEach(q => {
       const card = document.createElement("article");
       card.className = "card";
@@ -481,6 +482,13 @@ async function renderCards() {
 
       meta.append(badgeCat, badgeTopic, badgeType);
 
+      const editBtn = document.createElement("button");
+      editBtn.className = "card-edit-btn";
+      editBtn.textContent = "Editar";
+      editBtn.addEventListener("click", () => openEditModal(q.id));
+
+      head.append(meta, editBtn);
+
       const controls = document.createElement("div");
       controls.className = "card-controls";
 
@@ -494,17 +502,12 @@ async function renderCards() {
       likeCount.textContent =
         typeof q.likes === "number" && q.likes >= 0 ? q.likes : 0;
       likeBtn.append(likeIcon, likeCount);
-      likeBtn.addEventListener("click", async () => {
-        const updated = await db.incrementLikes(q.id);
+      likeBtn.addEventListener("click", () => {
+        const updated = db.incrementLikes(q.id);
         if (updated) {
           likeCount.textContent = updated.likes;
         }
       });
-
-      const editBtn = document.createElement("button");
-      editBtn.className = "card-edit-btn";
-      editBtn.textContent = "Editar";
-      editBtn.addEventListener("click", () => openEditModal(q.id));
 
       controls.append(likeBtn, editBtn);
       head.append(meta, controls);
@@ -545,7 +548,7 @@ async function renderCards() {
 
 /* Modal control */
 
-async function openCreateModal() {
+function openCreateModal() {
   state.editingQuestionId = null;
   modalTitle.textContent = "Nueva pregunta";
 
@@ -560,7 +563,7 @@ async function openCreateModal() {
   modalAnswer.value = "";
   modalNotes.value = "";
 
-  await refreshModalCategoryOptions();
+  refreshModalCategoryOptions();
   modalCategorySelect.setValue("", "");
   modalTopicSelect.setOptions([]);
   modalTypeSelect.setOptions([]);
@@ -569,8 +572,8 @@ async function openCreateModal() {
   modalBackdrop.classList.remove("hidden");
 }
 
-async function openEditModal(questionId) {
-  const snapshot = await db.getSnapshot();
+function openEditModal(questionId) {
+  const snapshot = db.getSnapshot();
   const q = snapshot.questions.find(item => item.id === questionId);
   if (!q) return;
 
@@ -585,15 +588,15 @@ async function openEditModal(questionId) {
   modalState.topicId = q.topicId;
   modalState.typeId = q.quizTypeId;
 
-  await refreshModalCategoryOptions();
+  refreshModalCategoryOptions();
   const cat = snapshot.categories.find(c => c.id === q.categoryId);
   modalCategorySelect.setValue(q.categoryId, cat ? cat.name : "");
 
-  await refreshModalTopicOptions();
+  refreshModalTopicOptions();
   const topic = snapshot.topics.find(t => t.id === q.topicId);
   modalTopicSelect.setValue(q.topicId, topic ? topic.name : "");
 
-  await refreshModalTypeOptions();
+  refreshModalTypeOptions();
   const type = snapshot.quizTypes.find(t => t.id === q.quizTypeId);
   modalTypeSelect.setValue(q.quizTypeId, type ? type.name : "");
 
@@ -614,43 +617,39 @@ function closeModal() {
 
 /* Events */
 
-btnAdd.addEventListener("click", () => {
-  openCreateModal();
-});
+btnAdd.addEventListener("click", openCreateModal);
 
-modalClose.addEventListener("click", () => {
-  closeModal();
-});
+modalClose.addEventListener("click", closeModal);
 
 modalBackdrop.addEventListener("click", e => {
   if (e.target === modalBackdrop) closeModal();
 });
 
-filterCategory.addEventListener("change", async () => {
+filterCategory.addEventListener("change", () => {
   state.filterCategoryId = filterCategory.value || "";
   state.filterTopicId = "";
   state.filterTypeId = "";
   filterTopic.value = "";
   filterType.value = "";
-  await refreshTopicFilter();
-  await refreshTypeFilter();
-  await renderCards();
+  refreshTopicFilter();
+  refreshTypeFilter();
+  renderCards();
 });
 
-filterTopic.addEventListener("change", async () => {
+filterTopic.addEventListener("change", () => {
   state.filterTopicId = filterTopic.value || "";
   state.filterTypeId = "";
   filterType.value = "";
-  await refreshTypeFilter();
-  await renderCards();
+  refreshTypeFilter();
+  renderCards();
 });
 
-filterType.addEventListener("change", async () => {
+filterType.addEventListener("change", () => {
   state.filterTypeId = filterType.value || "";
-  await renderCards();
+  renderCards();
 });
 
-modalSave.addEventListener("click", async () => {
+modalSave.addEventListener("click", () => {
   let { categoryId, topicId, typeId } = modalState;
   const question = modalQuestion.value.trim();
   const answer = modalAnswer.value.trim();
@@ -660,30 +659,31 @@ modalSave.addEventListener("click", async () => {
     return;
   }
 
-  const snapshot = await db.getSnapshot();
+  // Resolver y persistir categorías/temas/tipos pendientes
+  const snapshot = db.getSnapshot();
 
   let cat =
     snapshot.categories.find(c => c.id === categoryId) ||
     pending.categories.find(c => c.id === categoryId);
   if (cat && !snapshot.categories.find(c => c.id === cat.id)) {
-    cat = await db.ensureCategory(cat.name);
-    categoryId = cat?.id || categoryId;
+    cat = db.ensureCategory(cat.name);
+    categoryId = cat.id;
   }
 
   let topic =
-    snapshot.topics.find(t => t.id === topicId) ||
+    db.getTopics().find(t => t.id === topicId) ||
     pending.topics.find(t => t.id === topicId);
-  if (topic && !snapshot.topics.find(t => t.id === topic.id)) {
-    topic = await db.ensureTopic(topic.name, categoryId);
-    topicId = topic?.id || topicId;
+  if (topic && !db.getTopics().find(t => t.id === topic.id)) {
+    topic = db.ensureTopic(topic.name, categoryId);
+    topicId = topic.id;
   }
 
   let quizType =
-    snapshot.quizTypes.find(t => t.id === typeId) ||
+    db.getQuizTypes().find(t => t.id === typeId) ||
     pending.types.find(t => t.id === typeId);
-  if (quizType && !snapshot.quizTypes.find(t => t.id === quizType.id)) {
-    quizType = await db.ensureQuizType(quizType.name, categoryId, topicId);
-    typeId = quizType?.id || typeId;
+  if (quizType && !db.getQuizTypes().find(t => t.id === quizType.id)) {
+    quizType = db.ensureQuizType(quizType.name, categoryId, topicId);
+    typeId = quizType.id;
   }
 
   if (!categoryId || !topicId || !typeId) {
@@ -691,7 +691,7 @@ modalSave.addEventListener("click", async () => {
   }
 
   if (state.editingQuestionId) {
-    await db.updateQuestion(state.editingQuestionId, {
+    db.updateQuestion(state.editingQuestionId, {
       categoryId,
       topicId,
       quizTypeId: typeId,
@@ -700,7 +700,7 @@ modalSave.addEventListener("click", async () => {
       notes
     });
   } else {
-    await db.addQuestion({
+    db.addQuestion({
       categoryId,
       topicId,
       quizTypeId: typeId,
@@ -714,20 +714,17 @@ modalSave.addEventListener("click", async () => {
   pending.topics = [];
   pending.types = [];
 
-  await refreshCategoryFilter();
-  await refreshTopicFilter();
-  await refreshTypeFilter();
-  await renderCards();
+  // Refresh filters to capture potential new category / topic / type
+  refreshCategoryFilter();
+  refreshTopicFilter();
+  refreshTypeFilter();
+  renderCards();
   closeModal();
 });
 
 /* Initial render */
 
-async function init() {
-  await refreshCategoryFilter();
-  await refreshTopicFilter();
-  await refreshTypeFilter();
-  await renderCards();
-}
-
-init();
+refreshCategoryFilter();
+refreshTopicFilter();
+refreshTypeFilter();
+renderCards();

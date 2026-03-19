@@ -1,202 +1,124 @@
 import { nanoid } from "nanoid";
-import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "TU_SUPABASE_URL_AQUI";
-const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY_AQUI";
+const STORAGE_KEY = "examQuestionBank_v1";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const defaultData = {
+  categories: [],
+  topics: [],
+  quizTypes: [],
+  questions: []
+};
 
-async function safeSelect(query) {
-  const { data, error } = await query;
-  if (error) {
-    console.error("Supabase select error:", error);
-    return [];
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(defaultData);
+    const parsed = JSON.parse(raw);
+    return {
+      categories: parsed.categories || [],
+      topics: parsed.topics || [],
+      quizTypes: parsed.quizTypes || [],
+      questions: (parsed.questions || []).map(q => ({
+        ...q,
+        notes: typeof q.notes === "string" ? q.notes : "",
+        likes: typeof q.likes === "number" ? q.likes : 0
+      }))
+    };
+  } catch {
+    return structuredClone(defaultData);
   }
-  return data || [];
 }
 
-async function safeSingle(query) {
-  const { data, error } = await query;
-  if (error) {
-    console.error("Supabase single error:", error);
-    return null;
-  }
-  return data || null;
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 export const db = {
-  async getSnapshot() {
-    const [categories, topics, quizTypes, questions] = await Promise.all([
-      this.getCategories(),
-      this.getTopics(),
-      this.getQuizTypes(),
-      this.getQuestions()
-    ]);
+  _data: load(),
 
-    return {
-      categories,
-      topics,
-      quizTypes,
-      questions
-    };
+  getSnapshot() {
+    return structuredClone(this._data);
   },
 
-  async getCategories() {
-    const data = await safeSelect(
-      supabase.from("categories").select("*").order("name", {
-        ascending: true
-      })
+  getCategories() {
+    return [...this._data.categories].sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" })
     );
-    return data;
   },
 
-  async getTopics({ categoryId } = {}) {
-    let query = supabase.from("topics").select("*");
-    if (categoryId) {
-      query = query.eq("categoryId", categoryId);
-    }
-    const data = await safeSelect(
-      query.order("name", { ascending: true })
+  getTopics({ categoryId } = {}) {
+    let list = this._data.topics;
+    if (categoryId) list = list.filter(t => t.categoryId === categoryId);
+    return [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" })
     );
-    return data;
   },
 
-  async getQuizTypes({ categoryId, topicId } = {}) {
-    let query = supabase.from("quiz_types").select("*");
-    if (categoryId) {
-      query = query.eq("categoryId", categoryId);
-    }
-    if (topicId) {
-      query = query.eq("topicId", topicId);
-    }
-    const data = await safeSelect(
-      query.order("name", { ascending: true })
+  getQuizTypes({ categoryId, topicId } = {}) {
+    let list = this._data.quizTypes;
+    if (categoryId) list = list.filter(t => t.categoryId === categoryId);
+    if (topicId) list = list.filter(t => t.topicId === topicId);
+    return [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" })
     );
-    return data;
   },
 
-  async getQuestions(filters = {}) {
+  getQuestions(filters = {}) {
     const { categoryId, topicId, quizTypeId } = filters;
-    let query = supabase.from("questions").select("*");
-    if (categoryId) query = query.eq("categoryId", categoryId);
-    if (topicId) query = query.eq("topicId", topicId);
-    if (quizTypeId) query = query.eq("quizTypeId", quizTypeId);
-    const { data, error } = await query;
-    if (error) {
-      console.error("Supabase getQuestions error:", error);
-      return [];
-    }
-    return (data || []).map(q => ({
-      ...q,
-      notes: typeof q.notes === "string" ? q.notes : "",
-      likes: typeof q.likes === "number" ? q.likes : 0
-    }));
+    return this._data.questions.filter(q => {
+      if (categoryId && q.categoryId !== categoryId) return false;
+      if (topicId && q.topicId !== topicId) return false;
+      if (quizTypeId && q.quizTypeId !== quizTypeId) return false;
+      return true;
+    });
   },
 
-  async ensureCategory(name) {
+  ensureCategory(name) {
     const trimmed = name.trim();
     if (!trimmed) return null;
-
-    const existing = await safeSingle(
-      supabase
-        .from("categories")
-        .select("*")
-        .eq("name", trimmed)
-        .maybeSingle()
+    const existing = this._data.categories.find(
+      c => c.name === trimmed
     );
     if (existing) return existing;
-
-    const insert = {
-      id: nanoid(),
-      name: trimmed
-    };
-
-    const { data, error } = await supabase
-      .from("categories")
-      .insert(insert)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase ensureCategory insert error:", error);
-      return null;
-    }
-
-    return data;
+    const cat = { id: nanoid(), name: trimmed };
+    this._data.categories.push(cat);
+    save(this._data);
+    return cat;
   },
 
-  async ensureTopic(name, categoryId) {
+  ensureTopic(name, categoryId) {
     const trimmed = name.trim();
     if (!trimmed || !categoryId) return null;
-
-    const existing = await safeSingle(
-      supabase
-        .from("topics")
-        .select("*")
-        .eq("categoryId", categoryId)
-        .eq("name", trimmed)
-        .maybeSingle()
+    const existing = this._data.topics.find(
+      t =>
+        t.categoryId === categoryId &&
+        t.name === trimmed
     );
     if (existing) return existing;
-
-    const insert = {
-      id: nanoid(),
-      name: trimmed,
-      categoryId
-    };
-
-    const { data, error } = await supabase
-      .from("topics")
-      .insert(insert)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase ensureTopic insert error:", error);
-      return null;
-    }
-
-    return data;
+    const topic = { id: nanoid(), name: trimmed, categoryId };
+    this._data.topics.push(topic);
+    save(this._data);
+    return topic;
   },
 
-  async ensureQuizType(name, categoryId, topicId) {
+  ensureQuizType(name, categoryId, topicId) {
     const trimmed = name.trim();
     if (!trimmed || !categoryId || !topicId) return null;
-
-    const existing = await safeSingle(
-      supabase
-        .from("quiz_types")
-        .select("*")
-        .eq("categoryId", categoryId)
-        .eq("topicId", topicId)
-        .eq("name", trimmed)
-        .maybeSingle()
+    const existing = this._data.quizTypes.find(
+      t =>
+        t.categoryId === categoryId &&
+        t.topicId === topicId &&
+        t.name === trimmed
     );
     if (existing) return existing;
-
-    const insert = {
-      id: nanoid(),
-      name: trimmed,
-      categoryId,
-      topicId
-    };
-
-    const { data, error } = await supabase
-      .from("quiz_types")
-      .insert(insert)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase ensureQuizType insert error:", error);
-      return null;
-    }
-
-    return data;
+    const type = { id: nanoid(), name: trimmed, categoryId, topicId };
+    this._data.quizTypes.push(type);
+    save(this._data);
+    return type;
   },
 
-  async addQuestion({ categoryId, topicId, quizTypeId, question, answer, notes }) {
-    const insert = {
+  addQuestion({ categoryId, topicId, quizTypeId, question, answer, notes }) {
+    const q = {
       id: nanoid(),
       categoryId,
       topicId,
@@ -207,72 +129,26 @@ export const db = {
       likes: 0,
       createdAt: Date.now()
     };
-
-    const { data, error } = await supabase
-      .from("questions")
-      .insert(insert)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase addQuestion error:", error);
-      return null;
-    }
-
-    return data;
+    this._data.questions.push(q);
+    save(this._data);
+    return q;
   },
 
-  async updateQuestion(id, patch) {
-    const payload = { ...patch };
-    if (typeof payload.question === "string") {
-      payload.question = payload.question.trim();
-    }
-    if (typeof payload.answer === "string") {
-      payload.answer = payload.answer.trim();
-    }
-    if (typeof payload.notes === "string") {
-      payload.notes = payload.notes.trim();
-    }
-
-    const { data, error } = await supabase
-      .from("questions")
-      .update(payload)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase updateQuestion error:", error);
-      return null;
-    }
-
-    return data;
+  updateQuestion(id, patch) {
+    const idx = this._data.questions.findIndex(q => q.id === id);
+    if (idx === -1) return null;
+    this._data.questions[idx] = { ...this._data.questions[idx], ...patch };
+    save(this._data);
+    return this._data.questions[idx];
   },
 
-  async incrementLikes(id) {
-    const current = await safeSingle(
-      supabase
-        .from("questions")
-        .select("id, likes")
-        .eq("id", id)
-        .maybeSingle()
-    );
-    if (!current) return null;
-
-    const likes = typeof current.likes === "number" ? current.likes + 1 : 1;
-
-    const { data, error } = await supabase
-      .from("questions")
-      .update({ likes })
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase incrementLikes error:", error);
-      return null;
-    }
-
-    return data;
+  incrementLikes(id) {
+    const idx = this._data.questions.findIndex(q => q.id === id);
+    if (idx === -1) return null;
+    const current = this._data.questions[idx];
+    const likes = typeof current.likes === "number" ? current.likes : 0;
+    this._data.questions[idx] = { ...current, likes: likes + 1 };
+    save(this._data);
+    return this._data.questions[idx];
   }
 };
