@@ -1,5 +1,14 @@
-import { db } from "./storage.js";
-import { nanoid } from "nanoid";
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+// ================================================
+// SUPABASE CONFIGURACIÓN (NO TOQUES ESTO)
+// ================================================
+const supabaseUrl = 'https://tgfwwnxisohfcbogobza.supabase.co';
+const supabaseKey = 'sb_publishable_Mb1vjkL9YvoELvazo4IIdA_8ulD0gsR';
+
+const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+// ================================================
 
 /**
  * Minimal combinable, searchable select
@@ -16,31 +25,24 @@ class FilterSelect {
     this.isOpen = false;
     this._build();
   }
-
   _build() {
     this.root.innerHTML = "";
     this.root.classList.add("filter-select");
-
     this.input = document.createElement("input");
     this.input.type = "text";
     this.input.className = "filter-select-input";
     this.input.placeholder = this.placeholder;
-
     this.clearBtn = document.createElement("button");
     this.clearBtn.type = "button";
     this.clearBtn.className = "filter-select-clear";
     this.clearBtn.textContent = "×";
-
     this.arrow = document.createElement("span");
     this.arrow.className = "filter-select-arrow";
     this.arrow.textContent = "▾";
-
     this.dropdown = document.createElement("div");
     this.dropdown.className = "filter-select-dropdown";
     this.dropdown.style.display = "none";
-
     this.root.append(this.input, this.clearBtn, this.arrow, this.dropdown);
-
     this.input.addEventListener("focus", () => {
       this.open();
       this._renderList();
@@ -53,22 +55,18 @@ class FilterSelect {
       e.stopPropagation();
       this.toggle();
     });
-
     this.clearBtn.addEventListener("click", e => {
       e.stopPropagation();
       this.setValue("");
     });
-
     document.addEventListener("click", e => {
       if (!this.root.contains(e.target)) this.close();
     });
   }
-
   setOptions(options) {
     this.options = options || [];
     this._renderList();
   }
-
   setValue(value, label) {
     this.value = value || "";
     this.label = label || "";
@@ -83,52 +81,31 @@ class FilterSelect {
       this.onChange(this.value || "", this.label || "");
     }
   }
-
   open() {
     this.isOpen = true;
     this.dropdown.style.display = "block";
     this._renderList();
   }
-
   close() {
     this.isOpen = false;
     this.dropdown.style.display = "none";
   }
-
   toggle() {
     this.isOpen ? this.close() : this.open();
   }
-
   _renderList() {
     const query = this.input.value.trim().toLowerCase();
     const items = !query
       ? this.options
       : this.options.filter(o => o.label.toLowerCase().includes(query));
-
     this.dropdown.innerHTML = "";
-
     if (!items.length) {
       const empty = document.createElement("div");
       empty.className = "filter-select-empty";
       empty.textContent = "Sin coincidencias";
       this.dropdown.appendChild(empty);
-
-      if (this.allowCreate && query) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "filter-select-create";
-        btn.textContent = 'Crear nuevo?';
-        btn.addEventListener("click", e => {
-          e.stopPropagation();
-          if (typeof this.onCreate === "function") {
-            this.onCreate(query);
-          }
-        });
-        this.dropdown.appendChild(btn);
-      }
       return;
     }
-
     items.forEach(opt => {
       const div = document.createElement("div");
       div.className = "filter-select-option";
@@ -142,8 +119,7 @@ class FilterSelect {
   }
 }
 
-/* Main state */
-
+/* ==================== MAIN STATE ==================== */
 const state = {
   filterCategoryId: "",
   filterTopicId: "",
@@ -151,20 +127,18 @@ const state = {
   editingQuestionId: null
 };
 
-const pending = {
-  categories: [],
-  topics: [],
-  types: []
+const modalState = {
+  categoryId: "",
+  topicId: "",
+  typeId: ""
 };
 
-/* DOM references */
-
+/* ==================== DOM REFERENCES ==================== */
 const cardsContainer = document.getElementById("cards-container");
 const btnAdd = document.getElementById("btn-add");
 const filterCategory = document.getElementById("filter-category");
 const filterTopic = document.getElementById("filter-topic");
 const filterType = document.getElementById("filter-type");
-
 const modalBackdrop = document.getElementById("modal-backdrop");
 const modalTitle = document.getElementById("modal-title");
 const modalClose = document.getElementById("modal-close");
@@ -173,8 +147,7 @@ const modalAnswer = document.getElementById("modal-answer");
 const modalNotes = document.getElementById("modal-notes");
 const modalSave = document.getElementById("modal-save");
 
-/* Filter selects */
-
+/* ==================== FILTER SELECTS ==================== */
 const modalCategorySelect = new FilterSelect(
   document.getElementById("modal-category"),
   {
@@ -188,25 +161,6 @@ const modalCategorySelect = new FilterSelect(
     }
   }
 );
-modalCategorySelect.onCreate = (label) => {
-  const name = label.trim();
-  if (!name) return;
-
-  const existing =
-    db.getCategories().find(c => c.name === name) ||
-    pending.categories.find(c => c.name === name);
-
-  const created =
-    existing ||
-    { id: nanoid(), name };
-
-  if (!existing) {
-    pending.categories.push(created);
-  }
-
-  modalCategorySelect.setOptions(mapCategoriesToOptions());
-  modalCategorySelect.setValue(created.id, created.name);
-};
 
 const modalTopicSelect = new FilterSelect(
   document.getElementById("modal-topic"),
@@ -220,29 +174,6 @@ const modalTopicSelect = new FilterSelect(
     }
   }
 );
-modalTopicSelect.onCreate = (label) => {
-  const name = label.trim();
-  if (!name || !modalState.categoryId) return;
-
-  const existingBase = db
-    .getTopics({ categoryId: modalState.categoryId })
-    .find(t => t.name === name);
-  const existingPending = pending.topics.find(
-    t => t.categoryId === modalState.categoryId && t.name === name
-  );
-  const existing = existingBase || existingPending;
-
-  const created =
-    existing ||
-    { id: nanoid(), name, categoryId: modalState.categoryId };
-
-  if (!existing) {
-    pending.topics.push(created);
-  }
-
-  refreshModalTopicOptions();
-  modalTopicSelect.setValue(created.id, created.name);
-};
 
 const modalTypeSelect = new FilterSelect(
   document.getElementById("modal-type"),
@@ -255,476 +186,474 @@ const modalTypeSelect = new FilterSelect(
     }
   }
 );
-modalTypeSelect.onCreate = (label) => {
+
+/* ==================== CREACIÓN AUTOMÁTICA (onCreate) ==================== */
+modalCategorySelect.onCreate = async (label) => {
+  const name = label.trim();
+  if (!name) return;
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ name })
+    .select('id, name')
+    .single();
+  if (error) { console.error(error); return; }
+  modalCategorySelect.setValue(data.id, data.name);
+  await refreshModalCategoryOptions();
+};
+
+modalTopicSelect.onCreate = async (label) => {
+  const name = label.trim();
+  if (!name || !modalState.categoryId) return;
+  const { data, error } = await supabase
+    .from('topics')
+    .insert({ name, category_id: modalState.categoryId })
+    .select('id, name')
+    .single();
+  if (error) { console.error(error); return; }
+  modalTopicSelect.setValue(data.id, data.name);
+  await refreshModalTopicOptions();
+};
+
+modalTypeSelect.onCreate = async (label) => {
   const name = label.trim();
   if (!name || !modalState.categoryId || !modalState.topicId) return;
-
-  const existingBase = db
-    .getQuizTypes({
-      categoryId: modalState.categoryId,
-      topicId: modalState.topicId
-    })
-    .find(t => t.name === name);
-  const existingPending = pending.types.find(
-    t =>
-      t.categoryId === modalState.categoryId &&
-      t.topicId === modalState.topicId &&
-      t.name === name
-  );
-  const existing = existingBase || existingPending;
-
-  const created =
-    existing ||
-    {
-      id: nanoid(),
-      name,
-      categoryId: modalState.categoryId,
-      topicId: modalState.topicId
-    };
-
-  if (!existing) {
-    pending.types.push(created);
-  }
-
-  refreshModalTypeOptions();
-  modalTypeSelect.setValue(created.id, created.name);
+  const { data, error } = await supabase
+    .from('quiz_types')
+    .insert({ name, category_id: modalState.categoryId, topic_id: modalState.topicId })
+    .select('id, name')
+    .single();
+  if (error) { console.error(error); return; }
+  modalTypeSelect.setValue(data.id, data.name);
+  await refreshModalTypeOptions();
 };
 
-const modalState = {
-  categoryId: "",
-  topicId: "",
-  typeId: ""
-};
-
-/* Helpers */
-
-function mapCategoriesToOptions() {
-  const base = db.getCategories();
-  const extra = pending.categories;
-  return [...base, ...extra].map(c => ({ value: c.id, label: c.name }));
+/* ==================== HELPERS ASYNC ==================== */
+async function mapCategoriesToOptions() {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name')
+    .order('name');
+  if (error) { console.error(error); return []; }
+  return data.map(c => ({ value: c.id, label: c.name }));
 }
 
-function refreshCategoryFilter() {
-  const select = filterCategory;
-  const current = state.filterCategoryId;
-  select.innerHTML = '<option value="">Todas</option>';
-  const categories = db.getCategories();
-  categories.forEach(c => {
+async function getTopicsForCategory(categoryId) {
+  if (!categoryId) return [];
+  const { data } = await supabase
+    .from('topics')
+    .select('id, name')
+    .eq('category_id', categoryId)
+    .order('name');
+  return data.map(t => ({ value: t.id, label: t.name }));
+}
+
+async function getQuizTypesForCategoryTopic(categoryId, topicId) {
+  if (!categoryId || !topicId) return [];
+  const { data } = await supabase
+    .from('quiz_types')
+    .select('id, name')
+    .eq('category_id', categoryId)
+    .eq('topic_id', topicId)
+    .order('name');
+  return data.map(t => ({ value: t.id, label: t.name }));
+}
+
+async function refreshCategoryFilter() {
+  const { data } = await supabase
+    .from('categories')
+    .select('id, name')
+    .order('name');
+
+  filterCategory.innerHTML = '<option value="">Todas</option>';
+  data?.forEach(c => {
     const opt = document.createElement("option");
     opt.value = c.id;
     opt.textContent = c.name;
-    select.appendChild(opt);
+    filterCategory.appendChild(opt);
   });
-  if (categories.some(c => c.id === current)) {
-    select.value = current;
+
+  if (data?.some(c => c.id === state.filterCategoryId)) {
+    filterCategory.value = state.filterCategoryId;
   } else {
     state.filterCategoryId = "";
   }
 }
 
-function refreshTopicFilter() {
-  const select = filterTopic;
-  const current = state.filterTopicId;
-  select.innerHTML = '<option value="">Todos</option>';
-  const topics = db.getTopics({
-    categoryId: state.filterCategoryId || undefined
-  });
-  topics.forEach(t => {
+async function refreshTopicFilter() {
+  const { data } = await supabase
+    .from('topics')
+    .select('id, name')
+    .eq('category_id', state.filterCategoryId || '')
+    .order('name');
+
+  filterTopic.innerHTML = '<option value="">Todos</option>';
+  data?.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t.id;
     opt.textContent = t.name;
-    select.appendChild(opt);
+    filterTopic.appendChild(opt);
   });
-  if (topics.some(t => t.id === current)) {
-    select.value = current;
+
+  if (data?.some(t => t.id === state.filterTopicId)) {
+    filterTopic.value = state.filterTopicId;
   } else {
     state.filterTopicId = "";
   }
 }
 
-function refreshTypeFilter() {
-  const select = filterType;
-  const current = state.filterTypeId;
-  select.innerHTML = '<option value="">Todos</option>';
-  const types = db.getQuizTypes({
-    categoryId: state.filterCategoryId || undefined,
-    topicId: state.filterTopicId || undefined
-  });
-  types.forEach(t => {
+async function refreshTypeFilter() {
+  const { data } = await supabase
+    .from('quiz_types')
+    .select('id, name')
+    .eq('category_id', state.filterCategoryId || '')
+    .eq('topic_id', state.filterTopicId || '')
+    .order('name');
+
+  filterType.innerHTML = '<option value="">Todos</option>';
+  data?.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t.id;
     opt.textContent = t.name;
-    select.appendChild(opt);
+    filterType.appendChild(opt);
   });
-  if (types.some(t => t.id === current)) {
-    select.value = current;
+
+  if (data?.some(t => t.id === state.filterTypeId)) {
+    filterType.value = state.filterTypeId;
   } else {
     state.filterTypeId = "";
   }
 }
 
-function refreshModalCategoryOptions() {
-  modalCategorySelect.setOptions(mapCategoriesToOptions());
+async function refreshModalCategoryOptions() {
+  const options = await mapCategoriesToOptions();
+  modalCategorySelect.setOptions(options);
 }
 
-function refreshModalTopicOptions() {
+async function refreshModalTopicOptions() {
   if (!modalState.categoryId) {
     modalTopicSelect.setOptions([]);
     modalTopicSelect.setValue("", "");
     modalState.topicId = "";
     return;
   }
-
-  const base = db.getTopics({ categoryId: modalState.categoryId });
-  const extra = pending.topics.filter(t => t.categoryId === modalState.categoryId);
-  const list = [...base, ...extra].map(t => ({
-    value: t.id,
-    label: t.name
-  }));
-
-  modalTopicSelect.setOptions(list);
-  if (!list.some(t => t.value === modalState.topicId)) {
+  const options = await getTopicsForCategory(modalState.categoryId);
+  modalTopicSelect.setOptions(options);
+  if (!options.some(t => t.value === modalState.topicId)) {
     modalTopicSelect.setValue("", "");
     modalState.topicId = "";
   }
 }
 
-function refreshModalTypeOptions() {
+async function refreshModalTypeOptions() {
   if (!modalState.categoryId || !modalState.topicId) {
     modalTypeSelect.setOptions([]);
     modalTypeSelect.setValue("", "");
     modalState.typeId = "";
     return;
   }
-
-  const base = db.getQuizTypes({
-    categoryId: modalState.categoryId,
-    topicId: modalState.topicId
-  });
-  const extra = pending.types.filter(
-    t =>
-      t.categoryId === modalState.categoryId &&
-      t.topicId === modalState.topicId
-  );
-  const list = [...base, ...extra].map(t => ({ value: t.id, label: t.name }));
-
-  modalTypeSelect.setOptions(list);
-  if (!list.some(t => t.value === modalState.typeId)) {
+  const options = await getQuizTypesForCategoryTopic(modalState.categoryId, modalState.topicId);
+  modalTypeSelect.setOptions(options);
+  if (!options.some(t => t.value === modalState.typeId)) {
     modalTypeSelect.setValue("", "");
     modalState.typeId = "";
   }
 }
 
 function updateModalEnableFields() {
-  const enabled =
-    modalState.categoryId && modalState.topicId && modalState.typeId;
+  const enabled = modalState.categoryId && modalState.topicId && modalState.typeId;
   modalQuestion.disabled = !enabled;
   modalAnswer.disabled = !enabled;
   modalNotes.disabled = !enabled;
 }
 
-/* Rendering */
+/* ==================== RENDER CARDS (ASYNC) ==================== */
+async function renderCards() {
+  let query = supabase
+    .from('questions')
+    .select(`
+      id,
+      question,
+      answer,
+      notes,
+      likes,
+      created_at,
+      categories (name),
+      topics (name),
+      quiz_types (name)
+    `)
+    .order('created_at', { ascending: false });
 
-function renderCards() {
-  const questions = db.getQuestions({
-    categoryId: state.filterCategoryId || undefined,
-    topicId: state.filterTopicId || undefined,
-    quizTypeId: state.filterTypeId || undefined
-  });
+  if (state.filterCategoryId) query = query.eq('category_id', state.filterCategoryId);
+  if (state.filterTopicId)     query = query.eq('topic_id', state.filterTopicId);
+  if (state.filterTypeId)      query = query.eq('quiz_type_id', state.filterTypeId);
+
+  const { data: questions, error } = await query;
+
+  if (error) {
+    console.error("Error cargando preguntas:", error);
+    cardsContainer.innerHTML = "<p style='color:red'>Error al cargar las preguntas</p>";
+    return;
+  }
 
   cardsContainer.innerHTML = "";
 
-  if (!questions.length) {
+  if (!questions || questions.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent =
-      "Todavía no hay preguntas para estos filtros. Agrega tu primera pregunta para empezar.";
+    empty.textContent = "Todavía no hay preguntas para estos filtros. Agrega tu primera pregunta para empezar.";
     cardsContainer.appendChild(empty);
     return;
   }
 
-  const categories = db.getCategories();
-  const topics = db.getTopics();
-  const types = db.getQuizTypes();
+  questions.forEach(q => {
+    const card = document.createElement("article");
+    card.className = "card";
 
-  const catById = Object.fromEntries(categories.map(c => [c.id, c]));
-  const topicById = Object.fromEntries(topics.map(t => [t.id, t]));
-  const typeById = Object.fromEntries(types.map(t => [t.id, t]));
+    const head = document.createElement("div");
+    head.className = "card-head";
 
-  questions
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .forEach(q => {
-      const card = document.createElement("article");
-      card.className = "card";
+    const meta = document.createElement("div");
+    meta.className = "card-meta";
 
-      const head = document.createElement("div");
-      head.className = "card-head";
+    const badgeCat = document.createElement("span");
+    badgeCat.className = "badge badge-pill";
+    badgeCat.textContent = q.categories?.name || "Sin categoría";
 
-      const meta = document.createElement("div");
-      meta.className = "card-meta";
+    const badgeTopic = document.createElement("span");
+    badgeTopic.className = "badge badge-soft";
+    badgeTopic.textContent = q.topics?.name || "Tema";
 
-      const cat = catById[q.categoryId];
-      const topic = topicById[q.topicId];
-      const type = typeById[q.quizTypeId];
+    const badgeType = document.createElement("span");
+    badgeType.className = "badge badge-outline";
+    badgeType.textContent = q.quiz_types?.name || "Tipo";
 
-      const badgeCat = document.createElement("span");
-      badgeCat.className = "badge badge-pill";
-      badgeCat.textContent = cat ? cat.name : "Sin categoría";
+    meta.append(badgeCat, badgeTopic, badgeType);
 
-      const badgeTopic = document.createElement("span");
-      badgeTopic.className = "badge badge-soft";
-      badgeTopic.textContent = topic ? topic.name : "Tema";
+    const controls = document.createElement("div");
+    controls.className = "card-controls";
 
-      const badgeType = document.createElement("span");
-      badgeType.className = "badge badge-outline";
-      badgeType.textContent = type ? type.name : "Tipo";
+    const likeBtn = document.createElement("button");
+    likeBtn.className = "card-like-btn";
+    const likeIcon = document.createElement("span");
+    likeIcon.className = "card-like-icon";
+    likeIcon.textContent = "👍";
+    const likeCount = document.createElement("span");
+    likeCount.className = "card-like-count";
+    likeCount.textContent = q.likes || 0;
 
-      meta.append(badgeCat, badgeTopic, badgeType);
-
-      const editBtn = document.createElement("button");
-      editBtn.className = "card-edit-btn";
-      editBtn.textContent = "Editar";
-      editBtn.addEventListener("click", () => openEditModal(q.id));
-
-      head.append(meta, editBtn);
-
-      const controls = document.createElement("div");
-      controls.className = "card-controls";
-
-      const likeBtn = document.createElement("button");
-      likeBtn.className = "card-like-btn";
-      const likeIcon = document.createElement("span");
-      likeIcon.className = "card-like-icon";
-      likeIcon.textContent = "👍";
-      const likeCount = document.createElement("span");
-      likeCount.className = "card-like-count";
-      likeCount.textContent =
-        typeof q.likes === "number" && q.likes >= 0 ? q.likes : 0;
-      likeBtn.append(likeIcon, likeCount);
-      likeBtn.addEventListener("click", () => {
-        const updated = db.incrementLikes(q.id);
-        if (updated) {
-          likeCount.textContent = updated.likes;
-        }
-      });
-
-      controls.append(likeBtn, editBtn);
-      head.append(meta, controls);
-
-      const body = document.createElement("div");
-      body.className = "card-body";
-
-      const qEl = document.createElement("div");
-      qEl.className = "card-question";
-      qEl.textContent = q.question;
-
-      const answerLabel = document.createElement("div");
-      answerLabel.className = "card-answer-label";
-      answerLabel.textContent = "Respuesta";
-
-      const aEl = document.createElement("div");
-      aEl.className = "card-answer";
-      aEl.textContent = q.answer;
-
-      body.append(qEl, answerLabel, aEl);
-
-      if (q.notes && q.notes.trim()) {
-        const notesLabel = document.createElement("div");
-        notesLabel.className = "card-answer-label";
-        notesLabel.textContent = "Observaciones";
-
-        const notesEl = document.createElement("div");
-        notesEl.className = "card-answer";
-        notesEl.textContent = q.notes;
-
-        body.append(notesLabel, notesEl);
-      }
-
-      card.append(head, body);
-      cardsContainer.appendChild(card);
+    likeBtn.append(likeIcon, likeCount);
+    likeBtn.addEventListener("click", async () => {
+      const newCount = await incrementQuestionLikes(q.id);
+      if (newCount !== undefined) likeCount.textContent = newCount;
     });
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "card-edit-btn";
+    editBtn.textContent = "Editar";
+    editBtn.addEventListener("click", () => openEditModal(q.id));
+
+    controls.append(likeBtn, editBtn);
+    head.append(meta, controls);
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+
+    const qEl = document.createElement("div");
+    qEl.className = "card-question";
+    qEl.textContent = q.question;
+
+    const answerLabel = document.createElement("div");
+    answerLabel.className = "card-answer-label";
+    answerLabel.textContent = "Respuesta";
+
+    const aEl = document.createElement("div");
+    aEl.className = "card-answer";
+    aEl.textContent = q.answer;
+
+    body.append(qEl, answerLabel, aEl);
+
+    if (q.notes && q.notes.trim()) {
+      const notesLabel = document.createElement("div");
+      notesLabel.className = "card-answer-label";
+      notesLabel.textContent = "Observaciones";
+      const notesEl = document.createElement("div");
+      notesEl.className = "card-answer";
+      notesEl.textContent = q.notes;
+      body.append(notesLabel, notesEl);
+    }
+
+    card.append(head, body);
+    cardsContainer.appendChild(card);
+  });
 }
 
-/* Modal control */
+/* ==================== INCREMENT LIKES ==================== */
+async function incrementQuestionLikes(questionId) {
+  const { data: current } = await supabase
+    .from('questions')
+    .select('likes')
+    .eq('id', questionId)
+    .single();
 
-function openCreateModal() {
+  const newLikes = (current?.likes || 0) + 1;
+
+  const { error } = await supabase
+    .from('questions')
+    .update({ likes: newLikes })
+    .eq('id', questionId);
+
+  if (!error) return newLikes;
+}
+
+/* ==================== MODAL FUNCTIONS ==================== */
+async function openCreateModal() {
   state.editingQuestionId = null;
   modalTitle.textContent = "Nueva pregunta";
-
-  pending.categories = [];
-  pending.topics = [];
-  pending.types = [];
-
   modalState.categoryId = "";
   modalState.topicId = "";
   modalState.typeId = "";
   modalQuestion.value = "";
   modalAnswer.value = "";
   modalNotes.value = "";
-
-  refreshModalCategoryOptions();
+  await refreshModalCategoryOptions();
   modalCategorySelect.setValue("", "");
   modalTopicSelect.setOptions([]);
   modalTypeSelect.setOptions([]);
   updateModalEnableFields();
-
   modalBackdrop.classList.remove("hidden");
 }
 
-function openEditModal(questionId) {
-  const snapshot = db.getSnapshot();
-  const q = snapshot.questions.find(item => item.id === questionId);
-  if (!q) return;
+async function openEditModal(questionId) {
+  const { data: q, error } = await supabase
+    .from('questions')
+    .select(`
+      id,
+      category_id,
+      topic_id,
+      quiz_type_id,
+      question,
+      answer,
+      notes,
+      categories (name),
+      topics (name),
+      quiz_types (name)
+    `)
+    .eq('id', questionId)
+    .single();
+
+  if (error || !q) return;
 
   state.editingQuestionId = q.id;
   modalTitle.textContent = "Editar pregunta";
 
-  pending.categories = [];
-  pending.topics = [];
-  pending.types = [];
+  modalState.categoryId = q.category_id;
+  modalState.topicId = q.topic_id;
+  modalState.typeId = q.quiz_type_id;
 
-  modalState.categoryId = q.categoryId;
-  modalState.topicId = q.topicId;
-  modalState.typeId = q.quizTypeId;
+  await refreshModalCategoryOptions();
+  modalCategorySelect.setValue(q.category_id, q.categories?.name || "");
 
-  refreshModalCategoryOptions();
-  const cat = snapshot.categories.find(c => c.id === q.categoryId);
-  modalCategorySelect.setValue(q.categoryId, cat ? cat.name : "");
+  await refreshModalTopicOptions();
+  modalTopicSelect.setValue(q.topic_id, q.topics?.name || "");
 
-  refreshModalTopicOptions();
-  const topic = snapshot.topics.find(t => t.id === q.topicId);
-  modalTopicSelect.setValue(q.topicId, topic ? topic.name : "");
-
-  refreshModalTypeOptions();
-  const type = snapshot.quizTypes.find(t => t.id === q.quizTypeId);
-  modalTypeSelect.setValue(q.quizTypeId, type ? type.name : "");
+  await refreshModalTypeOptions();
+  modalTypeSelect.setValue(q.quiz_type_id, q.quiz_types?.name || "");
 
   modalQuestion.value = q.question;
   modalAnswer.value = q.answer;
   modalNotes.value = q.notes || "";
-  updateModalEnableFields();
 
+  updateModalEnableFields();
   modalBackdrop.classList.remove("hidden");
 }
 
 function closeModal() {
   modalBackdrop.classList.add("hidden");
-  pending.categories = [];
-  pending.topics = [];
-  pending.types = [];
 }
 
-/* Events */
-
+/* ==================== EVENTS ==================== */
 btnAdd.addEventListener("click", openCreateModal);
 
 modalClose.addEventListener("click", closeModal);
-
 modalBackdrop.addEventListener("click", e => {
   if (e.target === modalBackdrop) closeModal();
 });
 
-filterCategory.addEventListener("change", () => {
+filterCategory.addEventListener("change", async () => {
   state.filterCategoryId = filterCategory.value || "";
   state.filterTopicId = "";
   state.filterTypeId = "";
   filterTopic.value = "";
   filterType.value = "";
-  refreshTopicFilter();
-  refreshTypeFilter();
-  renderCards();
+  await refreshTopicFilter();
+  await refreshTypeFilter();
+  await renderCards();
 });
 
-filterTopic.addEventListener("change", () => {
+filterTopic.addEventListener("change", async () => {
   state.filterTopicId = filterTopic.value || "";
   state.filterTypeId = "";
   filterType.value = "";
-  refreshTypeFilter();
-  renderCards();
+  await refreshTypeFilter();
+  await renderCards();
 });
 
-filterType.addEventListener("change", () => {
+filterType.addEventListener("change", async () => {
   state.filterTypeId = filterType.value || "";
-  renderCards();
+  await renderCards();
 });
 
-modalSave.addEventListener("click", () => {
-  let { categoryId, topicId, typeId } = modalState;
-  const question = modalQuestion.value.trim();
+modalSave.addEventListener("click", async () => {
+  const { categoryId, topicId, typeId } = modalState;
+  const questionText = modalQuestion.value.trim();
   const answer = modalAnswer.value.trim();
   const notes = modalNotes.value.trim();
 
-  if (!categoryId || !topicId || !typeId || !question || !answer) {
+  if (!categoryId || !topicId || !typeId || !questionText || !answer) {
+    alert("Faltan campos obligatorios");
     return;
   }
 
-  // Resolver y persistir categorías/temas/tipos pendientes
-  const snapshot = db.getSnapshot();
+  const payload = {
+    category_id: categoryId,
+    topic_id: topicId,
+    quiz_type_id: typeId,
+    question: questionText,
+    answer: answer,
+    notes: notes || null,
+    likes: 0
+  };
 
-  let cat =
-    snapshot.categories.find(c => c.id === categoryId) ||
-    pending.categories.find(c => c.id === categoryId);
-  if (cat && !snapshot.categories.find(c => c.id === cat.id)) {
-    cat = db.ensureCategory(cat.name);
-    categoryId = cat.id;
-  }
-
-  let topic =
-    db.getTopics().find(t => t.id === topicId) ||
-    pending.topics.find(t => t.id === topicId);
-  if (topic && !db.getTopics().find(t => t.id === topic.id)) {
-    topic = db.ensureTopic(topic.name, categoryId);
-    topicId = topic.id;
-  }
-
-  let quizType =
-    db.getQuizTypes().find(t => t.id === typeId) ||
-    pending.types.find(t => t.id === typeId);
-  if (quizType && !db.getQuizTypes().find(t => t.id === quizType.id)) {
-    quizType = db.ensureQuizType(quizType.name, categoryId, topicId);
-    typeId = quizType.id;
-  }
-
-  if (!categoryId || !topicId || !typeId) {
-    return;
-  }
-
+  let error;
   if (state.editingQuestionId) {
-    db.updateQuestion(state.editingQuestionId, {
-      categoryId,
-      topicId,
-      quizTypeId: typeId,
-      question,
-      answer,
-      notes
-    });
+    ({ error } = await supabase
+      .from('questions')
+      .update(payload)
+      .eq('id', state.editingQuestionId));
   } else {
-    db.addQuestion({
-      categoryId,
-      topicId,
-      quizTypeId: typeId,
-      question,
-      answer,
-      notes
-    });
+    ({ error } = await supabase
+      .from('questions')
+      .insert(payload));
   }
 
-  pending.categories = [];
-  pending.topics = [];
-  pending.types = [];
+  if (error) {
+    console.error(error);
+    alert("Error al guardar: " + error.message);
+    return;
+  }
 
-  // Refresh filters to capture potential new category / topic / type
-  refreshCategoryFilter();
-  refreshTopicFilter();
-  refreshTypeFilter();
-  renderCards();
+  await refreshCategoryFilter();
+  await refreshTopicFilter();
+  await refreshTypeFilter();
+  await renderCards();
   closeModal();
 });
 
-/* Initial render */
-
-refreshCategoryFilter();
-refreshTopicFilter();
-refreshTypeFilter();
-renderCards();
+/* ==================== INITIAL RENDER ==================== */
+(async () => {
+  await refreshCategoryFilter();
+  await refreshTopicFilter();
+  await refreshTypeFilter();
+  await renderCards();
+})();
+</script>
